@@ -44,13 +44,29 @@ public class SerialPortService {
                         Console.WriteLine(s.Split(":")[1]);
                         SerialData.Luminosity = Convert.ToInt32(s.Split(":")[1]);
                     }
+
                     if (s.Split(":")[0].Contains("BV")) {
                         Console.WriteLine(s.Split(":")[1]);
-                        SerialData.Luminosity = Convert.ToInt32(s.Split(":")[1]);
+                        SerialData.DigitalStatus = s.Split(":")[1] == "on";
                     }
                 }
             }
+
+            foreach (var data in (dataSplit.Where(d => !d.Contains("A")))) {
+                if (data.Split(":")[0].Contains("LV")) {
+                    Console.WriteLine(data.Split(":")[1]);
+                    SerialData.Luminosity = Convert.ToInt32(data.Split(":")[1]);
+                }
+            }
+            
+            foreach (var data in (dataSplit.Where(d => !d.Contains("A")))) {
+                if (data.Split(":")[0].Contains("BV")) {
+                    Console.WriteLine(data.Split(":")[1]);
+                    SerialData.DigitalStatus = data.Split(":")[1] == "on";
+                }
+            }
         }
+        
         catch (Exception ex) {
             Console.WriteLine("Error: {0}", ex.Message);
         }
