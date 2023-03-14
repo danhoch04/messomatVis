@@ -1,40 +1,70 @@
 ﻿@page "/Gauge"
+@using View.Data
+@inject SerialPortService SerialPortService
 <div class="d-flex justify-content-center align-items-center flex-wrap">
-    <div >
-        <RadzenArcGauge Style="width: 1500px; height: 600px;">
-            <RadzenArcGaugeScale Step="20" Min="0" Max="1024" MinorStep="2" Radius="1.5" TickPosition=@tickPosition Y="0.9" Margin="0">
-                <RadzenArcGaugeScaleValue Value=@lightValue>
-                    <Template Context="pointer">
-                        <h4>
-                            @pointer.Value
-                        </h4>
-                    </Template>
-                </RadzenArcGaugeScaleValue>
-            </RadzenArcGaugeScale>
-        </RadzenArcGauge>
-        <h1 class="text-center"> Button Value: @buttonValue</h1>
-    </div>
     <div class="d-flex flex-row justify-content-center align-items-center p-5" style="width: 1200px;">
         <div class="text-center">
             <h3>Timer Intervall:</h3>
-            <RadzenSlider Min="1" Max="4" @bind-Value="@timerIntervall"/>
+            <RadzenSlider Min="1" Max="4" TValue="int" @bind-Value="@timerIntervall" Change="@OnChange" Disabled="!isTransmitting"/>
             <h3>@timerIntervall</h3>
         </div>
-        <RadzenDropDown class="m-4" TValue="string" Value=@selectedMode Data=@modes Change="@(args => selectedMode = $"{args}")" />
-        <RadzenButton class="m-4" ButtonStyle="ButtonStyle.Success" Text="Start Transmission"></RadzenButton>
-        <RadzenButton class="m-4" ButtonStyle="ButtonStyle.Danger" Text="Stop Transmission"></RadzenButton>
+        <RadzenDropDown class="m-4" TValue="string" Value=@selectedMode Data=@modes Change="@(args => selectedMode = $"{args}")" Disabled="isTransmitting"/>
+        @if (!isTransmitting) {
+            <RadzenButton class="m-4" ButtonStyle="ButtonStyle.Success" Text="Start Transmission" Click="() => StartTransmit()"></RadzenButton>
+        }
+        else {
+            <RadzenButton class="m-4" ButtonStyle="ButtonStyle.Danger" Text="Stop Transmission" Click="() => StopTransmit()"></RadzenButton>
+        }
     </div>
+    @if (selectedMode == "All") {
+        <div style="width: 100%;">
+            <h1 class="text-center"> Button Value: @MeasureResult.DigitalStatus</h1>
+        </div>
+        <div >
+            <RadzenArcGauge Style="width: 1500px; height: 600px;">
+                <RadzenArcGaugeScale Step="20" Min="0" Max="1024" MinorStep="2" Radius="1.5" TickPosition=@tickPosition Y="0.9" Margin="0">
+                    <RadzenArcGaugeScaleValue Value=@MeasureResult.Luminosity>
+                        <Template Context="pointer">
+                            <h4>
+                                @pointer.Value
+                            </h4>
+                        </Template>
+                    </RadzenArcGaugeScaleValue>
+                </RadzenArcGaugeScale>
+            </RadzenArcGauge>
+        </div>
+    }
+    else if (selectedMode == "Light") {
+        <div >
+            <RadzenArcGauge Style="width: 1500px; height: 600px;">
+                <RadzenArcGaugeScale Step="20" Min="0" Max="1024" MinorStep="2" Radius="1.5" TickPosition=@tickPosition Y="0.9" Margin="0">
+                    <RadzenArcGaugeScaleValue Value=@MeasureResult.Luminosity>
+                        <Template Context="pointer">
+                            <h4>
+                                @pointer.Value
+                            </h4>
+                        </Template>
+                    </RadzenArcGaugeScaleValue>
+                </RadzenArcGaugeScale>
+            </RadzenArcGauge>
+        </div>
+    }
+    else {
+        <div style="width: 100vw;">
+            <h1 class="text-center"> Button Value: @MeasureResult.DigitalStatus</h1>
+        </div>
+    }
 </div>
 
 
 @code {
-
-    int lightValue = 0;
-
-    string buttonValue;
     bool disabled = true;
 
-    double timerIntervall = 1;
+    bool isTransmitting = false;
+    
+    Timer _updateTimer;
+
+    int timerIntervall = 1;
 
     IEnumerable<string> modes = new[] {"Light", "Button", "All"};
     string selectedMode = "All";
@@ -42,6 +72,48 @@
     IEnumerable<GaugeTickPosition> tickPositions = Enum.GetValues(typeof(GaugeTickPosition)).Cast<GaugeTickPosition>();
     GaugeTickPosition tickPosition = GaugeTickPosition.Outside;
 
+    private MeasureResult MeasureResult = new() {DigitalStatus = false, Luminosity = 100};
 
+    protected override async Task OnInitializedAsync() {
+        _updateTimer = new Timer(_ => { InvokeAsync(GetValue); }, null, 0, 1000);
+    }
+
+    public async Task GetValue() {
+        MeasureResult result = await SerialPortService.GetSerialValue();
+        if (result is not null)
+            MeasureResult = result;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() {
+        _updateTimer.Dispose();
+    }
+
+    void OnChange(int value) {
+        timerIntervall = value;
+        SerialPortService.Write($"tr{timerIntervall}");
+        //Console.WriteLine($"{timerIntervall}");
+    }
+    
+    void StartTransmit() {
+        switch (selectedMode) {
+            case "All":
+                SerialPortService.Write("a");
+                break;
+            case "Light":
+                SerialPortService.Write("l");
+                break;
+            case "Button":
+                SerialPortService.Write("b");
+                break;
+        }
+        isTransmitting = true;
+    }
+    
+    void StopTransmit() {
+        SerialPortService.Write("s");
+        isTransmitting = false;
+    }
+    
 
 }
